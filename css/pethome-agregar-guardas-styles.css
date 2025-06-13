@@ -1,0 +1,422 @@
+/* Estilos Base de Flatpickr (Airbnb Theme - como lo tenías)
+ * Panel de listado de reservas (modificado para ser un CPT 'reserva_guarda' o WC_Booking)
+ * Panel de gestión de Clientes con buscador y paginación.
+ * Plugin Name: PetHomeHoney Plugin
+ * Plugin URI:  https://pethomehoney.com.ar
+ * Description: Plugin para gestionar reservas de guarda con WooCommerce y CPT.
+ * Version:     1.0 (Final y Estable)
+ * Author:      Adrián Enrique Badino
+ * Author URI:  https://pethomehoney.com.ar
+ * Desarrolla   www.streaminginternacional.com 
+ */
+ 
+.flatpickr-calendar {
+    background: transparent; /* ...resto de los estilos de flatpickr-calendar... */
+    opacity: 0;
+    display: none;
+    text-align: center;
+    visibility: hidden;
+    padding: 0;
+    -webkit-animation: none;
+            animation: none;
+    direction: ltr;
+    border: 0;
+    font-size: 14px;
+    line-height: 24px;
+    border-radius: 5px;
+    position: absolute;
+    width: 100%;
+    -webkit-box-sizing: border-box;
+            box-sizing: border-box;
+    -ms-touch-action: manipulation;
+        touch-action: manipulation;
+    background: #f9f9f9;
+    -webkit-box-shadow: 1px 0 0 #eee, -1px 0 0 #eee, 0 1px 0 #eee, 0 -1px 0 #eee, 0 3px 13px rgba(0,0,0,0.08);
+            box-shadow: 1px 0 0 #eee, -1px 0 0 #eee, 0 1px 0 #eee, 0 -1px 0 #eee, 0 3px 13px rgba(0,0,0,0.08);
+}
+.flatpickr-calendar.open,
+.flatpickr-calendar.inline {
+    opacity: 1;
+    visibility: visible;
+}
+.flatpickr-calendar.open {
+    display: inline-block;
+    z-index: 99999;
+}
+.flatpickr-calendar.animate.open {
+    -webkit-animation: fpFadeInDown 300ms cubic-bezier(0.23, 1, 0.32, 1);
+            animation: fpFadeInDown 300ms cubic-bezier(0.23, 1, 0.32, 1);
+}
+.flatpickr-calendar.inline {
+    display: block;
+    position: relative;
+    top: 2px;
+    width: 100%; /* Asegurar que ocupe el contenedor */
+    box-shadow: none; /* Quitar sombra si es inline y no popup */
+}
+/* ... (TODOS los demás estilos de Flatpickr que tenías en tu archivo CSS van aquí, asegúrate de que la corrección 'border-color: #5e4365;' esté hecha) ... */
+.flatpickr-day.selected,
+.flatpickr-day.startRange,
+.flatpickr-day.endRange,
+.flatpickr-day.selected.inRange,
+.flatpickr-day.startRange.inRange,
+.flatpickr-day.endRange.inRange,
+.flatpickr-day.selected:focus,
+.flatpickr-day.startRange:focus,
+.flatpickr-day.endRange:focus,
+.flatpickr-day.selected:hover,
+.flatpickr-day.startRange:hover,
+.flatpickr-day.endRange:hover,
+.flatpickr-day.selected.prevMonthDay,
+.flatpickr-day.startRange.prevMonthDay,
+.flatpickr-day.endRange.prevMonthDay,
+.flatpickr-day.selected.nextMonthDay,
+.flatpickr-day.startRange.nextMonthDay,
+.flatpickr-day.endRange.nextMonthDay {
+  background: #5e4365;
+  -webkit-box-shadow: none;
+          box-shadow: none;
+  color: #f9f9f9;
+  border-color: #5e4365; /* CORREGIDO */
+}
+/* ... (continúa con el resto de tus estilos de Flatpickr tal como los tenías) ... */
+
+.flatpickr-months {
+  display: -webkit-box;
+  display: -webkit-flex;
+  display: -ms-flexbox;
+  display: flex;
+  position: relative; /* Necesario para posicionar correctamente las flechas y el mes/año */
+  align-items: center; /* Centrar verticalmente los elementos del mes */
+  padding: 5px 0;
+}
+.flatpickr-months .flatpickr-month {
+  -webkit-box-flex: 1;
+  -webkit-flex: 1;
+      -ms-flex: 1;
+          flex: 1;
+  text-align: center;
+  height: auto; /* Ajustar altura */
+  line-height: normal; /* Ajustar altura de línea */
+  padding: 5px 0;
+}
+.flatpickr-current-month {
+    /* Ajustes para centrar el mes y año y permitir que las flechas no se superpongan */
+    position: static; /* Quitar posicionamiento absoluto si interfiere */
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    padding: 0 5px; /* Ajustar padding */
+    width: auto; /* Permitir que se ajuste al contenido */
+    left: auto; /* Resetear posicionamiento */
+    height: auto; /* Resetear altura */
+    line-height: normal;
+}
+
+.flatpickr-months .flatpickr-prev-month,
+.flatpickr-months .flatpickr-next-month {
+    position: static; /* Cambiar de absoluto a estático para que fluyan con flexbox */
+    height: auto;
+    padding: 5px 10px; /* Ajustar padding */
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+.flatpickr-current-month input.cur-year {
+    width: auto; /* Ajustar ancho */
+    min-width: 50px;
+    height: auto; /* Ajustar altura */
+    line-height: normal; /* Ajustar altura de línea */
+}
+
+.flatpickr-innerContainer {
+  display: block;
+  box-sizing: border-box;
+}
+.flatpickr-rContainer {
+  display: block; /* Cambiado a block para que ocupe el ancho */
+  padding: 0;
+  box-sizing: border-box;
+  width: 100%; /* Ocupa el 100% del contenedor inline */
+  height: auto; /* Altura automática */
+}
+
+.flatpickr-days {
+  position: relative;
+  overflow: hidden;
+  display: flex; /* Usar flex para los días */
+  align-items: flex-start;
+  width: 100%;
+  height: auto; /* Altura automática basada en el contenido */
+  min-height: 250px; /* Altura mínima para que se vea bien */
+}
+.dayContainer {
+  padding: 0;
+  outline: 0;
+  text-align: left;
+  width: 100%;
+  min-width: 100%;
+  max-width: 100%;
+  box-sizing: border-box;
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-around;
+  opacity: 1;
+}
+span.flatpickr-day {
+    height: 38px; /* Altura fija para los días */
+    line-height: 38px; /* Centrar verticalmente el número */
+    flex-basis: 14.2857143% !important; /* Asegurar que se divida en 7 columnas */
+    max-width: 14.2857143% !important;
+}
+
+/* --- Tus Estilos Generales del Formulario --- */
+.pethome-admin-wrap {
+    padding: 20px;
+    background: #f9f9f9;
+    border-radius: 8px;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+    margin-top: 20px;
+}
+
+.pethome-section {
+    background: #f9f9f9;
+    padding: 20px;
+    border-radius: 16px;
+    border: 1px solid #eee;
+    margin-bottom: 30px;
+}
+
+.pethome-details-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+    gap: 20px 15px; /* row-gap column-gap */
+}
+
+.pethome-details-grid div, /* Aplica a los contenedores de cada campo */
+.pethome-main-booking-grid > div { /* Aplica a los items directos del grid de reserva */
+    display: flex;
+    flex-direction: column; /* Los labels estarán encima de los inputs/selects */
+}
+
+.pethome-details-grid label,
+.pethome-main-booking-grid label {
+    font-weight: bold;
+    margin-bottom: 5px;
+    color: #555; /* Un poco más oscuro para mejor contraste */
+    font-size: 13px;
+}
+
+.pethome-details-grid input[type="text"],
+.pethome-details-grid input[type="email"],
+.pethome-details-grid input[type="number"],
+.pethome-details-grid select,
+.pethome-details-grid textarea,
+.pethome-main-booking-grid input[type="text"],
+.pethome-main-booking-grid input[type="time"],
+.pethome-main-booking-grid input[type="number"],
+.pethome-main-booking-grid select {
+    padding: 8px 10px;
+    border: 1px solid #ddd; /* Borde un poco más suave */
+    border-radius: 4px;
+    font-size: 14px;
+    box-sizing: border-box;
+    width: 100%;
+    background-color: #f9f9f9; /* Fondo blanco para inputs */
+    transition: border-color 0.15s ease-in-out, box-shadow 0.15s ease-in-out;
+}
+
+.pethome-details-grid input[type="text"]:focus,
+.pethome-details-grid input[type="email"]:focus,
+.pethome-details-grid input[type="number"]:focus,
+.pethome-details-grid select:focus,
+.pethome-details-grid textarea:focus,
+.pethome-main-booking-grid input[type="text"]:focus,
+.pethome-main-booking-grid input[type="time"]:focus,
+.pethome-main-booking-grid input[type="number"]:focus,
+.pethome-main-booking-grid select:focus {
+    border-color: #5e4365;
+    outline: 0;
+    box-shadow: 0 0 0 0.2rem rgba(94, 67, 101, 0.25);
+}
+
+
+/* --- INICIO: Estilos para el campo de Teléfono Compuesto --- */
+
+/* La etiqueta del campo teléfono se mostrará encima del grupo de inputs
+   debido a la regla general: .pethome-details-grid div { flex-direction: column; }
+   que se aplica a .item-telefono */
+.item-telefono > label {
+    /* No se necesita 'display: block;' si .item-telefono ya es flex-column. */
+    /* Tus estilos generales para label (font-weight, margin-bottom, color) ya deberían aplicarse. */
+    /* Ejemplo: 
+       font-weight: bold;
+       margin-bottom: 5px;
+       color: #555;
+    */
+}
+
+/* Contenedor para la línea de inputs del teléfono */
+.telefono-input-linea {
+    display: flex !important;       /* ¡CLAVE! Fuerza la alineación horizontal de sus hijos. */
+    flex-direction: row !important; /* Asegura explícitamente la dirección de fila. */
+    align-items: center;            /* Alinea verticalmente los ítems en el centro de la línea. */
+    gap: 8px;                       /* Espacio entre el prefijo y los campos de texto. */
+    width: 100%;                    /* Permite que la línea ocupe el ancho disponible en .item-telefono. */
+}
+
+.telefono-input-linea .telefono-prefijo.fijo {
+    white-space: nowrap; /* Evita que el prefijo se parta en dos líneas. */
+    flex-shrink: 0;      /* Evita que el prefijo se encoja si no hay espacio. */
+    /* Ajusta el padding para que la altura del texto coincida con la altura de los inputs: */
+    padding-top: 8px;    /* Asumiendo que tus inputs tienen un padding vertical similar */
+    padding-bottom: 8px;
+    color: #555;
+}
+
+/* Estilos específicos para los inputs de área y número dentro de la línea */
+.telefono-input-linea input#pethome_cliente_telefono_area {
+    width: 70px;         /* Ancho fijo para el código de área. */
+    min-width: 60px;     /* Ancho mínimo. */
+    flex-basis: 70px;    /* Tamaño base antes de crecer/encogerse. */
+    flex-grow: 0;        /* No permitir que crezca. */
+    flex-shrink: 0;      /* No permitir que se encoja. */
+    /* Los estilos de padding, border, background-color, etc., deberían heredarse de: */
+    /* .pethome-details-grid input[type="text"] */
+}
+
+.telefono-input-linea input#pethome_cliente_telefono_numero {
+    width: 120px;        /* Un ancho base sugerido para el número. */
+    min-width: 100px;
+    flex-basis: 120px;
+    flex-grow: 1;        /* Permitir que este campo crezca para usar el espacio restante. */
+    flex-shrink: 1;      /* Permitir que se encoja si es necesario. */
+}
+
+/* Es importante que los inputs dentro de .telefono-input-linea no sean forzados a width: 100% 
+   por una regla más general, para que los anchos específicos o flex-basis funcionen. */
+.pethome-details-grid .item-telefono .telefono-input-linea input[type="text"] {
+    width: auto !important; /* Anula un posible width: 100% de una regla general. */
+    /* Los estilos como padding, border, background-color deberían heredar de:
+       .pethome-details-grid input[type="text"] 
+       o puedes redefinirlos aquí si es necesario para consistencia.
+       Ejemplo:
+       padding: 8px 10px;
+       border: 1px solid #ddd;
+       border-radius: 4px;
+       background-color: #f9f9f9;
+    */
+}
+
+/* --- FIN: Estilos para el campo de Teléfono Compuesto --- */
+
+
+/* --- Estilos para el Grid Principal de Reserva --- */
+.pethome-main-booking-grid {
+    display: grid;
+    grid-template-columns: minmax(280px, 1.2fr) repeat(2, 1fr); /* Ajusta la primera columna si es necesario */
+    grid-template-areas:
+        "calendar hora-ingreso hora-egreso"
+        "calendar dias servicio-producto"
+        "calendar costo-diario sub-total"
+        "calendar cargos entrega"
+        "calendar precio-total saldo-final"
+        "fechas-display fechas-display fechas-display";
+    column-gap: 15px; 
+    row-gap: 12px;   
+    align-items: start;
+}
+
+.pethome-calendar-column { 
+    grid-area: calendar; 
+    min-width: 280px; /* Ancho mínimo para el calendario */
+}
+/* Estilos para #pethome_flatpickr_inline_calendar_container si es necesario */
+#pethome_flatpickr_inline_calendar_container .flatpickr-calendar.inline {
+    box-shadow: none; /* Quitar sombra si es inline */
+    border: 1px solid #ddd; /* Añadir un borde sutil */
+}
+
+
+.grid-item-fechas-seleccionadas {
+    grid-area: fechas-display;
+}
+.grid-item-fechas-seleccionadas input[type="text"] {
+    width: 100%;
+    padding: 8px 10px;
+    border: 1px solid #ddd;
+    border-radius: 4px;
+    background-color: #f9f9f9;
+    box-sizing: border-box;
+    min-height: 38px; /* Coincidir con otros inputs */
+    font-size: 13px;
+    color: #333;
+}
+
+.display-value-container {
+    padding: 8px 10px;
+    border: 1px solid #ddd;
+    border-radius: 4px;
+    background-color: #e9ecef; /* Un gris más claro para campos de solo lectura */
+    box-sizing: border-box;
+    display: flex;
+    align-items: center;
+    justify-content: flex-end; /* Alinea el texto a la derecha por defecto */
+    min-height: 38px; /* Altura consistente con inputs */
+    font-size: 14px;
+    color: #333;
+}
+.display-value-container p {
+    margin: 0;
+    padding: 0;
+}
+.days-field .display-value-container p { /* Para el campo "Días" específicamente */
+    justify-content: center;
+    text-align: center;
+    flex-grow: 1;
+}
+
+
+/* Media Queries para responsividad del grid principal */
+@media (max-width: 992px) {
+    .pethome-main-booking-grid {
+        grid-template-columns: 1fr 1fr;
+        grid-template-areas:
+            "calendar calendar"
+            "hora-ingreso hora-egreso"
+            "dias servicio-producto"
+            "costo-diario sub-total"
+            "cargos entrega"
+            "precio-total saldo-final"
+            "fechas-display fechas-display";
+    }
+}
+
+@media (max-width: 768px) {
+    .pethome-main-booking-grid {
+        grid-template-columns: 1fr;
+        grid-template-areas:
+            "calendar" "hora-ingreso" "hora-egreso" "dias" "servicio-producto"
+            "costo-diario" "sub-total" "cargos" "entrega" "precio-total" "saldo-final"
+            "fechas-display";
+    }
+}
+
+/* Media Selector (Preview de Imagen) */
+.item-imagen .preview-container {
+    margin-top: 10px;
+    border: 1px solid #ddd;
+    padding: 5px;
+    min-height: 100px; /* Para que tenga algo de altura aunque no haya imagen */
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background-color: #f9f9f9;
+    border-radius: 4px;
+}
+.item-imagen .preview-container img {
+    max-width: 100%;
+    max-height: 150px; /* Limitar altura de la preview */
+    height: auto;
+    border-radius: 3px;
+}
