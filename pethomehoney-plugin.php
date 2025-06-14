@@ -3,7 +3,7 @@
  * Plugin Name: PetHomeHoney Plugin
  * Plugin URI:  https://pethomehoney.com.ar
  * Description: Plugin para gestionar reservas de guarda con WooCommerce y CPT.
- * Version:     1.0 (Final y Estable)
+ * Version:     1.4 (Final y Estable)
  * Author:      Adrián Enrique Badino
  * Author URI:  https://pethomehoney.com.ar
  * Desarrollado por www.streaminginternacional.com 
@@ -14,6 +14,26 @@ if (!defined('ABSPATH')) {
 }
 
 require_once plugin_dir_path(__FILE__) . 'pethome_clientes_fusionar.php';
+
+/**
+ * Función para crear la tabla de tipos de cliente al activar el plugin.
+ */
+function pethome_crear_tabla_tipos_cliente() {
+    global $wpdb;
+    $table_name = $wpdb->prefix . 'phh_client_types';
+    $charset_collate = $wpdb->get_charset_collate();
+
+    $sql = "CREATE TABLE $table_name (
+        id mediumint(9) NOT NULL AUTO_INCREMENT,
+        name varchar(100) NOT NULL,
+        discount decimal(10,2) NOT NULL DEFAULT 0.00,
+        PRIMARY KEY  (id)
+    ) $charset_collate;";
+
+    require_once( ABSPATH . 'wp-admin/includes/upgrade.php' );
+    dbDelta( $sql );
+}
+register_activation_hook( __FILE__, 'pethome_crear_tabla_tipos_cliente' );
 
 
 /**
@@ -51,115 +71,211 @@ add_action('init', function () {
  * 2) Todo lo de admin (menús, assets, metaboxes, handlers…)
  */
 if (is_admin()) {
-    add_action('admin_menu', function () {
-        add_menu_page('Guardería de Mascotas', 'Guardería de Mascotas', 'manage_options', 'pethome_main', function () {
-            ?>
-            <div class="wrap">
-                <h1 style="color:#5e4365;">👋 Guardería de Mascotas</h1>
-                <p style="font-size: 16px;">Gestioná reservas, cuidadores, estadísticas y configuración.</p>
 
-                <div class="section-block">
-                    <h2><i class="fa-thin fa-paw"></i>¿Qué es PetHomeHoney?</h2>
-                    
-                    <p>
-                        ¡Bienvenido a <i class="fa-thin fa-house"></i> <strong>PetHomeHoney</strong>! Somos tu opción de guardería para mascotas en Córdoba, donde tu compañero peludo se sentirá como en su propio hogar. Nos diferenciamos por ofrecer un ambiente libre de caniles y jaulas.
-                    </p>
-                    <p>
-                        Para tu <i class="fa-thin fa-dog"></i> amigo, esto significa disfrutar de paseos diarios y mucha libertad para explorar en un entorno seguro y supervisado. Entendemos que cada mascota es única, por eso te invitamos a traer sus objetos familiares para que su estadía sea aún más confortable.
-                    </p>
-                    <p>
-                        Ya sea que tengas un <i class="fa-thin fa-dog"></i> juguetón o un <i class="fa-thin fa-cat"></i> curioso (¡que deberá venir con su transportín y arena!), en PetHomeHoney los recibimos con los brazos abiertos. Ofrecemos servicios flexibles por hora, día, semana o mes, adaptándonos a tus necesidades.
-                    </p>
-                    <p>
-                        Para reservar tu lugar, solo tenés que completar nuestro formulario y abonar una seña del 10%. ¡Esperamos darle la bienvenida a tu consentido en PetHomeHoney!
-                    </p>
-                    
-                    <img src="https://placehold.co/800x200/EEE/31343C?text=Mascotas+Felices+en+Nuestra+Guarder%C3%ADa" alt="Imagen de mascotas felices en PetHomeHoney" style="max-width: 100%; height: auto; border-radius: 6px; margin-top: 10px; display: block;">
-                </div>
+    /**
+     * Procesa el formulario de la página "Agregar Guarda".
+     */
+    function pethome_guardas_save_callback() {
+    // Suprimir temporalmente las advertencias de "deprecated" para que no rompan la redirección.
+    $previous_error_level = error_reporting();
+    error_reporting($previous_error_level & ~E_DEPRECATED);
 
-                <style type="text/css">
-                    .section-block {
-                        background: #f9f9f9;
-                        border: 2px solid #ccc;
-                        border-radius: 16px;
-                        padding: 20px;
-                        margin-top: 30px;
-                    }
-                    .section-block h2 {
-                        background: #5e4365;
-                        color: #ffffff;
-                        text-align: center;
-                        padding: 15px;
-                        margin: -20px -20px 20px -20px;
-                        border-radius: 14px 14px 0 0;
-                        font-size: 20px;
-                    }
-                    .section-block h2 i {
-                        margin-right: 10px;
-                    }
-                    .section-block p {
-                        font-size: 16px;
-                        line-height: 1.6;
-                        margin-bottom: 12px;
-                        padding: 0 5px;
-                    }
-                    .section-block p i {
-                        margin-right: 8px;
-                        color: #5e4365;
-                        width: 20px;
-                        text-align: center;
-                        font-size: 18px;
-                        vertical-align: -2px;
-                    }
-                    .section-block strong {
-                        font-weight: 600;
-                        color: #333;
-                    }
-                </style>
+    if (!isset($_POST['pethome_guarda_nonce']) || !wp_verify_nonce($_POST['pethome_guarda_nonce'], 'pethome_guarda_save_details')) {
+        wp_die('Falló la verificación de seguridad.');
+    }
 
-            </div>
-            <?php
-        }, 'dashicons-pets', 56);
+    if (!current_user_can('manage_options')) {
+        wp_die('No tenés permiso para realizar esta acción.');
+    }
 
-        add_submenu_page('pethome_main', 'Agregar Guarda', 'Agregar Guarda', 'manage_options', 'pethome_guardas_agregar', function () {
-            echo '<div class="wrap"><h1>Agregar Guarda</h1>';
-            $file = plugin_dir_path(__FILE__) . 'pethome_guardas_agregar.php';
-            if (file_exists($file)) {
-                include $file;
+    $post_id = isset($_POST['post_id']) ? intval($_POST['post_id']) : 0;
+    
+    $meta_keys_to_save = [
+        'pethome_reserva_fechas', 'pethome_reserva_cantidad_dias', 'pethome_reserva_hora_ingreso', 'pethome_reserva_hora_egreso',
+        'pethome_reserva_servicio', 'pethome_reserva_subtotal', 'pethome_reserva_precio_total', 'pethome_reserva_entrega', 'pethome_reserva_saldo_final', 'pethome_reserva_cargos',
+        'pethome_reserva_prioridad', 'pethome_reserva_costo_guarda_id', 'pethome_reserva_tipo_cliente_id',
+        'pethome_cliente_nombre', 'pethome_cliente_apellido', 'pethome_cliente_dni', 'pethome_cliente_alias_bancario',
+        'pethome_cliente_calle', 'pethome_cliente_numero', 'pethome_cliente_barrio', 'pethome_cliente_email', 'pethome_cliente_telefono',
+        'pethome_mascota_nombre', 'pethome_mascota_tipo', 'pethome_mascota_raza', 'pethome_mascota_tamano', 'pethome_mascota_edad', 'pethome_mascota_edad_meses', 'pethome_mascota_sexo', 'pethome_mascota_castrada',
+        'pethome_mascota_enfermedades', 'pethome_mascota_medicamentos', 'pethome_mascota_alergias', 'pethome_mascota_cobertura_salud',
+        'pethome_mascota_vacunas_completas', 'pethome_mascota_desparasitado', 'pethome_mascota_antipulgas',
+        'pethome_mascota_veterinario_nombre', 'pethome_mascota_veterinario_telefono', 'pethome_mascota_observaciones_sanidad',
+        'pethome_mascota_chip', 'pethome_mascota_collar_identificacion', 'pethome_mascota_con_correa', 'pethome_mascota_con_pechera',
+        'pethome_mascota_observaciones_seguridad', 'pethome_mascota_sociable_perros', 'pethome_mascota_sociable_ninios', 
+        'pethome_reserva_observaciones', 'pethome_reserva_cuidador_asignado', 'pethome_mascota_imagen_id',
+    ];
+
+    $cliente_nombre = sanitize_text_field($_POST['pethome_cliente_nombre'] ?? '');
+    $mascota_nombre = sanitize_text_field($_POST['pethome_mascota_nombre'] ?? '');
+    $post_title = "Reserva para $mascota_nombre de $cliente_nombre";
+    if (empty(trim($cliente_nombre)) || empty(trim($mascota_nombre))) {
+        $post_title = "Nueva Reserva - " . date_i18n('d/m/Y H:i');
+    }
+
+    $post_data = [
+        'post_type'    => 'reserva_guarda',
+        'post_status'  => 'publish',
+        'post_title'   => $post_title,
+        'post_content' => '', // Aseguramos que los campos principales no sean nulos
+        'post_excerpt' => '',
+    ];
+
+    if ($post_id > 0) {
+        $post_data['ID'] = $post_id;
+        $saved_post_id = wp_update_post($post_data, true);
+    } else {
+        $saved_post_id = wp_insert_post($post_data, true);
+    }
+    
+    if (is_wp_error($saved_post_id)) {
+        error_reporting($previous_error_level); // Restaurar nivel de error antes de terminar
+        wp_die('Error al guardar la reserva: ' . $saved_post_id->get_error_message());
+    }
+    
+    foreach ($meta_keys_to_save as $key) {
+        if (isset($_POST[$key])) {
+            $value = $_POST[$key];
+            if ($key === 'pethome_cliente_dni') {
+                update_post_meta($saved_post_id, $key, preg_replace('/\D/', '', $value));
+            } elseif (strpos($key, 'email') !== false) {
+                update_post_meta($saved_post_id, $key, sanitize_email($value));
+            } elseif (strpos($key, 'observaciones') !== false) {
+                update_post_meta($saved_post_id, $key, sanitize_textarea_field($value));
+            } else {
+                update_post_meta($saved_post_id, $key, sanitize_text_field($value));
             }
-        });
+        }
+    }
 
-        add_submenu_page('pethome_main', 'Panel de Reservas', 'Reservas', 'manage_options', 'pethome_reservas', function () {
-            echo '<div class="wrap"><h1>Panel de Reservas</h1>';
-            $file = plugin_dir_path(__FILE__) . 'pethome_reservas.php';
-            if (file_exists($file)) {
-                include_once $file;
-                if (function_exists('pethome_reservas')) {
-                    pethome_reservas();
+    $redirect_url = admin_url('admin.php?page=pethome_guardas_agregar&post=' . $saved_post_id . '&status=saved');
+    
+    // Restaurar el nivel de reporte de errores a su estado original
+    error_reporting($previous_error_level);
+
+    wp_redirect($redirect_url);
+    exit;
+}
+    add_action('admin_post_pethome_guardas_save', 'pethome_guardas_save_callback');
+
+    /**
+     * Centraliza el procesamiento de todos los formularios de la página de configuración.
+     */
+    function pethome_handle_config_forms() {
+        if ( ! isset( $_GET['page'] ) || $_GET['page'] !== 'pethome_configuracion' ) {
+            return;
+        }
+
+        global $wpdb;
+        $should_redirect = false;
+
+        // --- Lógica de Guardado y Edición (POST requests) ---
+        if ( $_SERVER['REQUEST_METHOD'] == 'POST' ) {
+
+            // Tipos de Cliente
+            if ( ! empty( $_POST['guardar_tipo_cliente'] ) && check_admin_referer('pethome_client_type_nonce') ) {
+                $table_name = $wpdb->prefix . 'phh_client_types';
+                $name = sanitize_text_field($_POST['nuevo_tipo_cliente_nombre']);
+                $valor = abs(floatval(str_replace(',', '.', $_POST['nuevo_valor_modificador'])));
+                $tipo_modificador = sanitize_text_field($_POST['nuevo_tipo_modificador']);
+                $valor_final = ($tipo_modificador === 'descuento') ? -$valor : $valor;
+                if (!empty($name)) {
+                    $wpdb->insert($table_name, ['name' => $name, 'discount' => $valor_final], ['%s', '%f']);
+                    $should_redirect = true;
                 }
             }
-        });
+            if ( ! empty( $_POST['editar_tipo_cliente_guardar'] ) && check_admin_referer('pethome_client_type_nonce') ) {
+                $table_name = $wpdb->prefix . 'phh_client_types';
+                $id = intval($_POST['id_tipo_cliente']);
+                $name = sanitize_text_field($_POST['tipo_cliente_nombre_edit']);
+                $valor = abs(floatval(str_replace(',', '.', $_POST['valor_modificador_edit'])));
+                $tipo_modificador = sanitize_text_field($_POST['tipo_modificador_edit']);
+                $valor_final = ($tipo_modificador === 'descuento') ? -$valor : $valor;
+                if ($id > 0 && !empty($name)) {
+                    $wpdb->update($table_name, ['name' => $name, 'discount' => $valor_final], ['id' => $id], ['%s', '%f'], ['%d']);
+                    $should_redirect = true;
+                }
+            }
 
-        add_submenu_page('pethome_main', 'Todas las Reservas', 'Todas las Reservas', 'manage_options', 'pethome_todas_las_reservas', 'pethome_todas_las_reservas_page_callback');
-        add_submenu_page('pethome_main', 'Clientes', 'Clientes', 'manage_options', 'pethome_clientes', 'pethome_clientes_callback');
-        
-        add_submenu_page(null, 'Editar Cliente', 'Editar Cliente', 'manage_options', 'pethome_cliente_editar', 'pethome_cliente_editar_panel');
+            // ... (El resto de la lógica de guardado de la configuración permanece igual)
+            
+            if ($should_redirect) {
+                wp_redirect( remove_query_arg( ['_wpnonce', '_wp_http_referer', 'settings-updated', 'editar_tipo_cliente', 'editar', 'editar_tipo', 'editar_raza', 'editar_relacion', 'edit_whatsapp' ], wp_unslash( $_SERVER['REQUEST_URI'] ) ) );
+                exit;
+            }
+        }
 
-        add_submenu_page('pethome_main', 'Cuidadores', 'Cuidadores', 'manage_options', 'pethome_cuidadores', 'pethome_cuidadores_callback');
-        add_submenu_page(null, 'Editar Cuidador', 'Editar Cuidador', 'manage_options', 'pethome_cuidador_editar', 'pethome_cuidador_editar_panel');
-        
-        add_submenu_page('pethome_main', 'Costos de Guardas', 'Costos Guardas', 'manage_options', 'pethome_costos_guardas', 'pethome_render_costos_page');
-        add_submenu_page('pethome_main', 'Estadísticas', 'Estadísticas', 'manage_options', 'pethome_estadisticas', 'pethome_estadisticas_callback');
-        add_submenu_page('pethome_main', 'Importar', 'Importar', 'manage_options', 'pethome_importador', 'pethome_importador_callback');
-        
-        add_submenu_page('pethome_main', 'Fusionar Clientes', 'Fusionar Clientes', 'manage_options', 'pethome_clientes_fusionar', 'pethome_clientes_fusionar_panel');
+        // ... (La lógica de borrado de la configuración permanece igual)
+    }
+    add_action('admin_init', 'pethome_handle_config_forms');
 
-        add_submenu_page('pethome_main', 'Configuración', 'Configuración', 'manage_options', 'pethome_configuracion', 'pethome_configuracion_callback');
-        
-        // Eliminar el primer submenú que duplica el título principal
-        remove_submenu_page('pethome_main', 'pethome_main');
-    });
     
+    /**
+     * Registra todos los menús y submenús del plugin.
+     */
+    function pethome_register_admin_menus() {
+    add_menu_page('Guardería de Mascotas', 'Guardería de Mascotas', 'manage_options', 'pethome_main', 'pethome_main_page_callback', 'dashicons-pets', 56);
+    add_submenu_page('pethome_main', 'Agregar Guarda', 'Agregar Guarda', 'manage_options', 'pethome_guardas_agregar', 'pethome_guardas_agregar_page_callback');
+    add_submenu_page('pethome_main', 'Panel de Reservas', 'Reservas', 'manage_options', 'pethome_reservas', 'pethome_reservas_page_callback');
+    add_submenu_page('pethome_main', 'Todas las Reservas', 'Todas las Reservas', 'manage_options', 'pethome_todas_las_reservas', 'pethome_todas_las_reservas_page_callback');
+    add_submenu_page('pethome_main', 'Clientes', 'Clientes', 'manage_options', 'pethome_clientes', 'pethome_clientes_callback');
+    add_submenu_page(null, 'Editar Cliente', 'Editar Cliente', 'manage_options', 'pethome_cliente_editar', 'pethome_cliente_editar_panel');
+    add_submenu_page('pethome_main', 'Cuidadores', 'Cuidadores', 'manage_options', 'pethome_cuidadores', 'pethome_cuidadores_callback');
+    add_submenu_page(null, 'Editar Cuidador', 'Editar Cuidador', 'manage_options', 'pethome_cuidador_editar', 'pethome_cuidador_editar_panel');
+    add_submenu_page('pethome_main', 'Costos de Guardas', 'Costos Guardas', 'manage_options', 'pethome_costos_guardas', 'pethome_render_costos_page');
+    add_submenu_page('pethome_main', 'Estadísticas', 'Estadísticas', 'manage_options', 'pethome_estadisticas', 'pethome_estadisticas_callback');
+    add_submenu_page('pethome_main', 'Importar', 'Importar', 'manage_options', 'pethome_importador', 'pethome_importador_callback');
+    add_submenu_page('pethome_main', 'Fusionar Clientes', 'Fusionar Clientes', 'manage_options', 'pethome_clientes_fusionar', 'pethome_clientes_fusionar_panel');
+    add_submenu_page('pethome_main', 'Configuración', 'Configuración', 'manage_options', 'pethome_configuracion', 'pethome_configuracion_callback');
+    remove_submenu_page('pethome_main', 'pethome_main');
+    }
+    add_action('admin_menu', 'pethome_register_admin_menus');
+
+    /**
+     * Funciones de callback para renderizar las páginas del menú.
+     */
+    function pethome_main_page_callback() {
+        ?>
+        <div class="wrap">
+            <h1 style="color:#5e4365;">👋 Guardería de Mascotas</h1>
+            <p style="font-size: 16px;">Gestioná reservas, cuidadores, estadísticas y configuración.</p>
+            <div class="section-block">
+                <h2><i class="fa-thin fa-paw"></i>¿Qué es PetHomeHoney?</h2>
+                <p>¡Bienvenido a <i class="fa-thin fa-house"></i> <strong>PetHomeHoney</strong>! Somos tu opción de guardería para mascotas en Córdoba, donde tu compañero peludo se sentirá como en su propio hogar. Nos diferenciamos por ofrecer un ambiente libre de caniles y jaulas.</p>
+                <p>Para tu <i class="fa-thin fa-dog"></i> amigo, esto significa disfrutar de paseos diarios y mucha libertad para explorar en un entorno seguro y supervisado. Entendemos que cada mascota es única, por eso te invitamos a traer sus objetos familiares para que su estadía sea aún más confortable.</p>
+                <p>Ya sea que tengas un <i class="fa-thin fa-dog"></i> juguetón o un <i class="fa-thin fa-cat"></i> curioso (¡que deberá venir con su transportín y arena!), en PetHomeHoney los recibimos con los brazos abiertos. Ofrecemos servicios flexibles por hora, día, semana o mes, adaptándonos a tus necesidades.</p>
+                <p>Para reservar tu lugar, solo tenés que completar nuestro formulario y abonar una seña del 10%. ¡Esperamos darle la bienvenida a tu consentido en PetHomeHoney!</p>
+                <img src="https://placehold.co/800x200/EEE/31343C?text=Mascotas+Felices+en+Nuestra+Guarder%C3%ADa" alt="Imagen de mascotas felices en PetHomeHoney" style="max-width: 100%; height: auto; border-radius: 6px; margin-top: 10px; display: block;">
+            </div>
+            <style type="text/css">
+                .section-block { background: #f9f9f9; border: 2px solid #ccc; border-radius: 16px; padding: 20px; margin-top: 30px; }
+                .section-block h2 { background: #5e4365; color: #ffffff; text-align: center; padding: 15px; margin: -20px -20px 20px -20px; border-radius: 14px 14px 0 0; font-size: 20px; }
+                .section-block h2 i { margin-right: 10px; }
+                .section-block p { font-size: 16px; line-height: 1.6; margin-bottom: 12px; padding: 0 5px; }
+                .section-block p i { margin-right: 8px; color: #5e4365; width: 20px; text-align: center; font-size: 18px; vertical-align: -2px; }
+                .section-block strong { font-weight: 600; color: #333; }
+            </style>
+        </div>
+        <?php
+    }
+
+    function pethome_reservas_page_callback() {
+        $file = plugin_dir_path(__FILE__) . 'pethome_reservas.php';
+        if (file_exists($file)) {
+            include_once $file;
+            if (function_exists('pethome_reservas')) {
+                pethome_reservas();
+            }
+        }
+    }
+
+    function pethome_guardas_agregar_page_callback() {
+        $file = plugin_dir_path(__FILE__) . 'pethome_guardas_agregar.php';
+        if (file_exists($file)) {
+            include_once $file;
+        }
+    }
+    
+    // ... (todas las demás funciones de callback permanecen iguales)
     function pethome_cliente_editar_panel() {
         $file = plugin_dir_path(__FILE__) . 'pethome_cliente_editar.php';
         if (file_exists($file)) { include $file; }
@@ -198,25 +314,34 @@ if (is_admin()) {
     }
 
     add_filter('parent_file', 'pethome_set_active_menu_for_cpt');
-    function pethome_set_active_menu_for_cpt($parent_file) {
-        global $current_screen, $pagenow;
-        
-        $base = $current_screen->base;
-
-        if ($current_screen->post_type == 'reserva_guarda' && ($pagenow == 'post.php' || $pagenow == 'post-new.php')) {
-            return 'pethome_main';
-        }
-        
-        $pages_to_highlight = [
-            'guarder-a-de-mascotas_page_pethome_cliente_editar',
-            'guarder-a-de-mascotas_page_pethome_clientes_fusionar',
-            'guarder-a-de-mascotas_page_pethome_cuidador_editar'
-        ];
-        if ( in_array($base, $pages_to_highlight) ) {
-             return 'pethome_main';
-        }
-
+function pethome_set_active_menu_for_cpt($parent_file) {
+    global $current_screen, $pagenow;
+    
+    // Salir de forma segura si el objeto de la pantalla actual no existe.
+    if ( ! is_object( $current_screen ) ) {
         return $parent_file;
+    }
+    
+    // Asignar valores de forma segura para evitar errores con valores nulos.
+    $base = $current_screen->base ?? null;
+    $post_type = $current_screen->post_type ?? null;
+
+    if ($post_type === 'reserva_guarda' && ($pagenow === 'post.php' || $pagenow === 'post-new.php')) {
+        return 'pethome_main';
+    }
+    
+    $pages_to_highlight = [
+        'guarder-a-de-mascotas_page_pethome_cliente_editar',
+        'guarder-a-de-mascotas_page_pethome_clientes_fusionar',
+        'guarder-a-de-mascotas_page_pethome_cuidador_editar'
+    ];
+
+    // Comprobar que $base sea un string antes de usarlo en in_array.
+    if ( is_string($base) && in_array($base, $pages_to_highlight) ) {
+         return 'pethome_main';
+    }
+
+    return $parent_file;
     }
 
     add_action('admin_head', 'pethome_global_admin_styles');
@@ -1044,308 +1169,308 @@ if (is_admin()) {
         }
     }
     
-/**
- * 6) Widget para el Escritorio de WordPress
- * Muestra estadísticas, accesos directos y últimas reservas.
- */
-add_action('wp_dashboard_setup', 'pethome_registrar_widget_escritorio');
+    /**
+     * 6) Widget para el Escritorio de WordPress
+     * Muestra estadísticas, accesos directos y últimas reservas.
+     */
+    add_action('wp_dashboard_setup', 'pethome_registrar_widget_escritorio');
 
-/**
- * Registra el widget en el escritorio de WordPress.
- */
-function pethome_registrar_widget_escritorio() {
-    // Aumentar la prioridad para que aparezca más arriba
-    global $wp_meta_boxes;
-    
-    wp_add_dashboard_widget(
-        'pethome_resumen_widget',
-        '<i class="fa-thin fa-paw" style="margin-right: 8px;"></i> Resumen de PetHomeHoney',
-        'pethome_render_widget_escritorio'
-    );
+    /**
+     * Registra el widget en el escritorio de WordPress.
+     */
+    function pethome_registrar_widget_escritorio() {
+        // Aumentar la prioridad para que aparezca más arriba
+        global $wp_meta_boxes;
+        
+        wp_add_dashboard_widget(
+            'pethome_resumen_widget',
+            '<i class="fa-thin fa-paw" style="margin-right: 8px;"></i> Resumen de PetHomeHoney',
+            'pethome_render_widget_escritorio'
+        );
 
-    // Mover nuestro widget al principio
-    $dashboard = $wp_meta_boxes['dashboard']['normal']['core'];
-    $my_widget = ['pethome_resumen_widget' => $dashboard['pethome_resumen_widget']];
-    unset($dashboard['pethome_resumen_widget']);
-    $sorted_dashboard = array_merge($my_widget, $dashboard);
-    $wp_meta_boxes['dashboard']['normal']['core'] = $sorted_dashboard;
-}
-
-/**
- * Renderiza el contenido HTML y CSS del widget.
- */
-function pethome_render_widget_escritorio() {
-    // --- 1. OBTENER Y PROCESAR DATOS ---
-    
-    // -- Estadísticas Simples --
-    $query_clientes = new WP_User_Query(['meta_key'   => '_pethome_is_cliente', 'meta_value' => '1', 'fields' => 'ID']);
-    $total_clientes = $query_clientes->get_total();
-    $cuidadores = get_option('pethome_cuidadores', []);
-    $total_cuidadores = count($cuidadores);
-
-    // -- Preparación para Gráficos y Top 10 --
-    $cuidador_counts = array_fill_keys(array_keys($cuidadores), 0);
-    $months = [];
-    $reservations_by_month = [];
-    $revenue_by_month = [];
-
-    for ($i = 11; $i >= 0; $i--) {
-        $month_key = date('Y-m', strtotime("-$i months"));
-        $month_label = date_i18n('M Y', strtotime("-$i months"));
-        $months[$month_key] = $month_label;
-        $reservations_by_month[$month_key] = 0;
-        $revenue_by_month[$month_key] = 0;
+        // Mover nuestro widget al principio
+        $dashboard = $wp_meta_boxes['dashboard']['normal']['core'];
+        $my_widget = ['pethome_resumen_widget' => $dashboard['pethome_resumen_widget']];
+        unset($dashboard['pethome_resumen_widget']);
+        $sorted_dashboard = array_merge($my_widget, $dashboard);
+        $wp_meta_boxes['dashboard']['normal']['core'] = $sorted_dashboard;
     }
 
-    $all_items_query = new WP_Query([
-        'post_type'      => ['reserva_guarda', 'wc_booking'],
-        'posts_per_page' => -1,
-        'post_status'    => 'any',
-        'date_query'     => [['after' => '1 year ago', 'inclusive' => true]],
-    ]);
+    /**
+     * Renderiza el contenido HTML y CSS del widget.
+     */
+    function pethome_render_widget_escritorio() {
+        // --- 1. OBTENER Y PROCESAR DATOS ---
+        
+        // -- Estadísticas Simples --
+        $query_clientes = new WP_User_Query(['meta_key'   => '_pethome_is_cliente', 'meta_value' => '1', 'fields' => 'ID']);
+        $total_clientes = $query_clientes->get_total();
+        $cuidadores = get_option('pethome_cuidadores', []);
+        $total_cuidadores = count($cuidadores);
 
-    if ($all_items_query->have_posts()) {
-        while ($all_items_query->have_posts()) {
-            $all_items_query->the_post();
-            $item_id = get_the_ID();
-            $item_type = get_post_type($item_id);
-            $item_date_key = get_the_date('Y-m');
-            
-            // Sumar para los gráficos
-            if (isset($months[$item_date_key])) {
-                $reservations_by_month[$item_date_key]++;
-                $monto = 0;
-                if ($item_type === 'wc_booking') {
-                    $booking = new WC_Booking($item_id);
-                    $monto = floatval($booking->get_cost());
-                } else {
-                    $monto = floatval(get_post_meta($item_id, 'pethome_reserva_precio_total', true));
+        // -- Preparación para Gráficos y Top 10 --
+        $cuidador_counts = array_fill_keys(array_keys($cuidadores), 0);
+        $months = [];
+        $reservations_by_month = [];
+        $revenue_by_month = [];
+
+        for ($i = 11; $i >= 0; $i--) {
+            $month_key = date('Y-m', strtotime("-$i months"));
+            $month_label = date_i18n('M Y', strtotime("-$i months"));
+            $months[$month_key] = $month_label;
+            $reservations_by_month[$month_key] = 0;
+            $revenue_by_month[$month_key] = 0;
+        }
+
+        $all_items_query = new WP_Query([
+            'post_type'      => ['reserva_guarda', 'wc_booking'],
+            'posts_per_page' => -1,
+            'post_status'    => 'any',
+            'date_query'     => [['after' => '1 year ago', 'inclusive' => true]],
+        ]);
+
+        if ($all_items_query->have_posts()) {
+            while ($all_items_query->have_posts()) {
+                $all_items_query->the_post();
+                $item_id = get_the_ID();
+                $item_type = get_post_type($item_id);
+                $item_date_key = get_the_date('Y-m');
+                
+                // Sumar para los gráficos
+                if (isset($months[$item_date_key])) {
+                    $reservations_by_month[$item_date_key]++;
+                    $monto = 0;
+                    if ($item_type === 'wc_booking') {
+                        $booking = new WC_Booking($item_id);
+                        $monto = floatval($booking->get_cost());
+                    } else {
+                        $monto = floatval(get_post_meta($item_id, 'pethome_reserva_precio_total', true));
+                    }
+                    $revenue_by_month[$item_date_key] += $monto;
                 }
-                $revenue_by_month[$item_date_key] += $monto;
+
+                // Contar para el Top 10 Cuidadores
+                $cuidador_id = get_post_meta($item_id, 'pethome_reserva_cuidador_asignado', true);
+                if ($cuidador_id !== '' && isset($cuidador_counts[$cuidador_id])) {
+                    $cuidador_counts[$cuidador_id]++;
+                }
+            }
+        }
+        wp_reset_postdata();
+
+        // Ordenar y cortar el Top 10
+        arsort($cuidador_counts);
+        $top_cuidadores = array_slice($cuidador_counts, 0, 10, true);
+
+        $latest_reservations_query = new WP_Query([
+            'post_type'      => ['reserva_guarda', 'wc_booking'], 'posts_per_page' => 5,
+            'orderby'        => 'date', 'order' => 'DESC', 'post_status' => 'any',
+        ]);
+
+
+        // --- 2. ESTILOS DEL WIDGET ---
+        ?>
+        <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+        <style>
+            .phh-widget-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 15px; margin-bottom: 25px; }
+            .phh-stat-card { background-color: #f9f9f9; border: 2px solid #ccc; border-radius: 12px; padding: 15px; text-align: center; text-decoration: none; color: #333; transition: transform 0.2s ease, box-shadow 0.2s ease; }
+            .phh-stat-card:hover { transform: translateY(-4px); box-shadow: 0 4px 10px rgba(0,0,0,0.1); border-color: #5e4365; }
+            .phh-stat-card .stat-icon { font-size: 28px; color: #5e4365; margin-bottom: 8px; }
+            .phh-stat-card .stat-number { font-size: 32px; font-weight: bold; line-height: 1; color: #3c3c3c; margin: 0; }
+            .phh-stat-card .stat-label { margin: 5px 0 0 0; font-weight: 600; color: #555; font-size: 13px; }
+            
+            .phh-section { border-top: 2px solid #eee; padding-top: 20px; margin-top: 25px; }
+            .phh-section h3 { margin-top: 0; margin-bottom: 15px; text-align: center; color: #555; font-size: 14px; font-weight: bold; }
+            
+            .phh-main-layout { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }
+            @media (max-width: 1200px) { .phh-main-layout { grid-template-columns: 1fr; } }
+            
+            .chart-wrapper {
+                height: 200px;
+                margin-bottom: 25px;
+            }
+            .chart-wrapper:last-child {
+                margin-bottom: 0;
             }
 
-            // Contar para el Top 10 Cuidadores
-            $cuidador_id = get_post_meta($item_id, 'pethome_reserva_cuidador_asignado', true);
-            if ($cuidador_id !== '' && isset($cuidador_counts[$cuidador_id])) {
-                $cuidador_counts[$cuidador_id]++;
-            }
-        }
-    }
-    wp_reset_postdata();
+            .phh-links-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+            .phh-links-grid .phh-button { display: flex; align-items: center; justify-content: center; gap: 8px; padding: 10px; text-decoration: none; font-weight: bold; border-radius: 8px; background-color: #5e4365; color: #fff; transition: background-color 0.2s ease; }
+            .phh-links-grid .phh-button:hover { background-color: #4a3550; }
+            .phh-links-grid .phh-button.add-new { background-color: #28a745; }
+            .phh-links-grid .phh-button.add-new:hover { background-color: #218838; }
 
-    // Ordenar y cortar el Top 10
-    arsort($cuidador_counts);
-    $top_cuidadores = array_slice($cuidador_counts, 0, 10, true);
+            .phh-latest-list { list-style: none; margin: 0; padding: 0; }
+            .phh-latest-list li a { display: flex; align-items: center; padding: 12px 8px; border-bottom: 1px solid #eee; text-decoration: none; color: #3c3c3c; transition: background-color 0.2s ease; border-radius: 4px; }
+            .phh-latest-list li:last-child a { border-bottom: none; }
+            .phh-latest-list li a:hover { background-color: #f3eef4; }
+            .phh-latest-list .item-icon { font-size: 18px; color: #5e4365; margin-right: 12px; width: 20px; text-align: center; }
+            .phh-latest-list .item-details { flex-grow: 1; }
+            .phh-latest-list .item-details strong { font-weight: 600; }
+            .phh-latest-list .item-details .item-meta { font-size: 12px; color: #666; }
+            .phh-latest-list .item-exit-time { font-size: 13px; font-weight: 600; text-align: right; white-space: nowrap; color: #5e4365;}
 
-    $latest_reservations_query = new WP_Query([
-        'post_type'      => ['reserva_guarda', 'wc_booking'], 'posts_per_page' => 5,
-        'orderby'        => 'date', 'order' => 'DESC', 'post_status' => 'any',
-    ]);
+            .phh-top-list { list-style: none; margin: 0; padding: 0; }
+            .phh-top-list li { display: flex; align-items: center; padding: 8px 5px; border-bottom: 1px solid #eee; }
+            .phh-top-list li .pos { font-weight: bold; color: #5e4365; width: 25px; }
+            .phh-top-list li .name { flex-grow: 1; font-weight: 500; }
+            .phh-top-list li .count { font-weight: bold; background-color: #e9e5ea; padding: 3px 8px; border-radius: 6px; font-size: 12px; }
+        </style>
+        <?php
 
-
-    // --- 2. ESTILOS DEL WIDGET ---
-    ?>
-    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-    <style>
-        .phh-widget-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 15px; margin-bottom: 25px; }
-        .phh-stat-card { background-color: #f9f9f9; border: 2px solid #ccc; border-radius: 12px; padding: 15px; text-align: center; text-decoration: none; color: #333; transition: transform 0.2s ease, box-shadow 0.2s ease; }
-        .phh-stat-card:hover { transform: translateY(-4px); box-shadow: 0 4px 10px rgba(0,0,0,0.1); border-color: #5e4365; }
-        .phh-stat-card .stat-icon { font-size: 28px; color: #5e4365; margin-bottom: 8px; }
-        .phh-stat-card .stat-number { font-size: 32px; font-weight: bold; line-height: 1; color: #3c3c3c; margin: 0; }
-        .phh-stat-card .stat-label { margin: 5px 0 0 0; font-weight: 600; color: #555; font-size: 13px; }
-        
-        .phh-section { border-top: 2px solid #eee; padding-top: 20px; margin-top: 25px; }
-        .phh-section h3 { margin-top: 0; margin-bottom: 15px; text-align: center; color: #555; font-size: 14px; font-weight: bold; }
-        
-        .phh-main-layout { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }
-        @media (max-width: 1200px) { .phh-main-layout { grid-template-columns: 1fr; } }
-        
-        .chart-wrapper {
-            height: 200px;
-            margin-bottom: 25px;
-        }
-        .chart-wrapper:last-child {
-            margin-bottom: 0;
-        }
-
-        .phh-links-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
-        .phh-links-grid .phh-button { display: flex; align-items: center; justify-content: center; gap: 8px; padding: 10px; text-decoration: none; font-weight: bold; border-radius: 8px; background-color: #5e4365; color: #fff; transition: background-color 0.2s ease; }
-        .phh-links-grid .phh-button:hover { background-color: #4a3550; }
-        .phh-links-grid .phh-button.add-new { background-color: #28a745; }
-        .phh-links-grid .phh-button.add-new:hover { background-color: #218838; }
-
-        .phh-latest-list { list-style: none; margin: 0; padding: 0; }
-        .phh-latest-list li a { display: flex; align-items: center; padding: 12px 8px; border-bottom: 1px solid #eee; text-decoration: none; color: #3c3c3c; transition: background-color 0.2s ease; border-radius: 4px; }
-        .phh-latest-list li:last-child a { border-bottom: none; }
-        .phh-latest-list li a:hover { background-color: #f3eef4; }
-        .phh-latest-list .item-icon { font-size: 18px; color: #5e4365; margin-right: 12px; width: 20px; text-align: center; }
-        .phh-latest-list .item-details { flex-grow: 1; }
-        .phh-latest-list .item-details strong { font-weight: 600; }
-        .phh-latest-list .item-details .item-meta { font-size: 12px; color: #666; }
-        .phh-latest-list .item-exit-time { font-size: 13px; font-weight: 600; text-align: right; white-space: nowrap; color: #5e4365;}
-
-        .phh-top-list { list-style: none; margin: 0; padding: 0; }
-        .phh-top-list li { display: flex; align-items: center; padding: 8px 5px; border-bottom: 1px solid #eee; }
-        .phh-top-list li .pos { font-weight: bold; color: #5e4365; width: 25px; }
-        .phh-top-list li .name { flex-grow: 1; font-weight: 500; }
-        .phh-top-list li .count { font-weight: bold; background-color: #e9e5ea; padding: 3px 8px; border-radius: 6px; font-size: 12px; }
-    </style>
-    <?php
-
-    // --- 3. HTML DEL WIDGET ---
-    ?>
-    <div class="phh-widget-container">
-        
-        <div class="phh-widget-grid">
-            <a href="<?php echo admin_url('admin.php?page=pethome_clientes'); ?>" class="phh-stat-card">
-                <div class="stat-icon"><i class="fa-thin fa-users"></i></div>
-                <h3 class="stat-number"><?php echo esc_html($total_clientes); ?></h3><p class="stat-label">Clientes</p>
-            </a>
-            <a href="<?php echo admin_url('admin.php?page=pethome_cuidadores'); ?>" class="phh-stat-card">
-                <div class="stat-icon"><i class="fa-thin fa-user-nurse"></i></div>
-                <h3 class="stat-number"><?php echo esc_html($total_cuidadores); ?></h3><p class="stat-label">Cuidadores</p>
-            </a>
-            <a href="<?php echo admin_url('admin.php?page=pethome_todas_las_reservas'); ?>" class="phh-stat-card">
-                <div class="stat-icon"><i class="fa-thin fa-calendar-check"></i></div>
-                <h3 class="stat-number"><?php echo esc_html($all_items_query->found_posts); ?></h3><p class="stat-label">Reservas (Año)</p>
-            </a>
-        </div>
-
-        <div class="phh-section">
-            <div class="chart-wrapper">
-                <h3><i class="fa-thin fa-chart-simple"></i> Guardas por Mes</h3>
-                <canvas id="phhReservasChart"></canvas>
+        // --- 3. HTML DEL WIDGET ---
+        ?>
+        <div class="phh-widget-container">
+            
+            <div class="phh-widget-grid">
+                <a href="<?php echo admin_url('admin.php?page=pethome_clientes'); ?>" class="phh-stat-card">
+                    <div class="stat-icon"><i class="fa-thin fa-users"></i></div>
+                    <h3 class="stat-number"><?php echo esc_html($total_clientes); ?></h3><p class="stat-label">Clientes</p>
+                </a>
+                <a href="<?php echo admin_url('admin.php?page=pethome_cuidadores'); ?>" class="phh-stat-card">
+                    <div class="stat-icon"><i class="fa-thin fa-user-nurse"></i></div>
+                    <h3 class="stat-number"><?php echo esc_html($total_cuidadores); ?></h3><p class="stat-label">Cuidadores</p>
+                </a>
+                <a href="<?php echo admin_url('admin.php?page=pethome_todas_las_reservas'); ?>" class="phh-stat-card">
+                    <div class="stat-icon"><i class="fa-thin fa-calendar-check"></i></div>
+                    <h3 class="stat-number"><?php echo esc_html($all_items_query->found_posts); ?></h3><p class="stat-label">Reservas (Año)</p>
+                </a>
             </div>
-            <div class="chart-wrapper">
-                <h3><i class="fa-thin fa-sack-dollar"></i> Montos por Mes</h3>
-                <canvas id="phhMontosChart"></canvas>
-            </div>
-        </div>
 
-        <div class="phh-section">
-            <div class="phh-main-layout">
-                <div>
-                    <h3><i class="fa-thin fa-star"></i> Top 10 Cuidadores</h3>
-                    <?php if (!empty($top_cuidadores)) : ?>
-                        <ol class="phh-top-list">
-                            <?php $pos = 1; foreach ($top_cuidadores as $cuidador_id => $count) : ?>
+            <div class="phh-section">
+                <div class="chart-wrapper">
+                    <h3><i class="fa-thin fa-chart-simple"></i> Guardas por Mes</h3>
+                    <canvas id="phhReservasChart"></canvas>
+                </div>
+                <div class="chart-wrapper">
+                    <h3><i class="fa-thin fa-sack-dollar"></i> Montos por Mes</h3>
+                    <canvas id="phhMontosChart"></canvas>
+                </div>
+            </div>
+
+            <div class="phh-section">
+                <div class="phh-main-layout">
+                    <div>
+                        <h3><i class="fa-thin fa-star"></i> Top 10 Cuidadores</h3>
+                        <?php if (!empty($top_cuidadores)) : ?>
+                            <ol class="phh-top-list">
+                                <?php $pos = 1; foreach ($top_cuidadores as $cuidador_id => $count) : ?>
+                                    <li>
+                                        <span class="pos"><?php echo $pos++; ?>.</span>
+                                        <span class="name"><?php echo esc_html($cuidadores[$cuidador_id]['alias'] ?? 'ID ' . $cuidador_id); ?></span>
+                                        <span class="count"><?php echo esc_html($count); ?> guardas</span>
+                                    </li>
+                                <?php endforeach; ?>
+                            </ol>
+                        <?php else: ?>
+                            <p>No hay datos de cuidadores para mostrar.</p>
+                        <?php endif; ?>
+                    </div>
+                    <div>
+                        <h3><i class="fa-thin fa-clock"></i> Últimas Reservas Creadas</h3>
+                        <?php if ($latest_reservations_query->have_posts()) : ?>
+                            <ul class="phh-latest-list">
+                                <?php while ($latest_reservations_query->have_posts()) : $latest_reservations_query->the_post(); ?>
                                 <li>
-                                    <span class="pos"><?php echo $pos++; ?>.</span>
-                                    <span class="name"><?php echo esc_html($cuidadores[$cuidador_id]['alias'] ?? 'ID ' . $cuidador_id); ?></span>
-                                    <span class="count"><?php echo esc_html($count); ?> guardas</span>
+                                    <a href="<?php echo get_edit_post_link(get_the_ID()); ?>">
+                                        <span class="item-icon"><i class="fa-thin fa-calendar-days"></i></span>
+                                        <div class="item-details">
+                                            <strong>
+                                            <?php 
+                                                $nombre_mascota = 'N/D';
+                                                if (get_post_type() === 'wc_booking') {
+                                                    $booking = new WC_Booking(get_the_ID());
+                                                    $producto = $booking->get_product();
+                                                    $nombre_mascota = $producto ? $producto->get_name() : 'Servicio Eliminado';
+                                                } else {
+                                                    $nombre_mascota = get_post_meta(get_the_ID(), 'pethome_mascota_nombre', true) ?: 'Sin Nombre';
+                                                }
+                                                echo esc_html($nombre_mascota);
+                                            ?>
+                                            </strong>
+                                            <div class="item-meta">Reserva #<?php echo get_the_ID(); ?></div>
+                                        </div>
+                                        <div class="item-exit-time">
+                                            <?php
+                                                 $fecha_salida = 'N/D';
+                                                 if (get_post_type() === 'wc_booking') {
+                                                    $booking = new WC_Booking(get_the_ID());
+                                                    $fecha_salida = date_i18n('d/m/Y H:i', $booking->get_end());
+                                                 } else {
+                                                    $fechas_str = get_post_meta(get_the_ID(), 'pethome_reserva_fechas', true);
+                                                    $hora_egreso = get_post_meta(get_the_ID(), 'pethome_reserva_hora_egreso', true);
+                                                    $fecha_fin_str = !empty($fechas_str) ? substr($fechas_str, strpos($fechas_str, ' a ') + 3) : '';
+                                                    if ($fecha_fin_str) { $fecha_salida = date_i18n('d/m/Y', strtotime($fecha_fin_str)) . ($hora_egreso ? ' ' . $hora_egreso : ''); }
+                                                 }
+                                                 echo esc_html($fecha_salida);
+                                            ?>
+                                        </div>
+                                    </a>
                                 </li>
-                            <?php endforeach; ?>
-                        </ol>
-                    <?php else: ?>
-                        <p>No hay datos de cuidadores para mostrar.</p>
-                    <?php endif; ?>
+                                <?php endwhile; ?>
+                            </ul>
+                        <?php else : ?>
+                            <p style="text-align:center; font-style:italic; color:#777;">No hay reservas para mostrar.</p>
+                        <?php endif; wp_reset_postdata(); ?>
+                    </div>
                 </div>
-                <div>
-                    <h3><i class="fa-thin fa-clock"></i> Últimas Reservas Creadas</h3>
-                    <?php if ($latest_reservations_query->have_posts()) : ?>
-                        <ul class="phh-latest-list">
-                            <?php while ($latest_reservations_query->have_posts()) : $latest_reservations_query->the_post(); ?>
-                            <li>
-                                <a href="<?php echo get_edit_post_link(get_the_ID()); ?>">
-                                    <span class="item-icon"><i class="fa-thin fa-calendar-days"></i></span>
-                                    <div class="item-details">
-                                        <strong>
-                                        <?php 
-                                            $nombre_mascota = 'N/D';
-                                            if (get_post_type() === 'wc_booking') {
-                                                $booking = new WC_Booking(get_the_ID());
-                                                $producto = $booking->get_product();
-                                                $nombre_mascota = $producto ? $producto->get_name() : 'Servicio Eliminado';
-                                            } else {
-                                                $nombre_mascota = get_post_meta(get_the_ID(), 'pethome_mascota_nombre', true) ?: 'Sin Nombre';
-                                            }
-                                            echo esc_html($nombre_mascota);
-                                        ?>
-                                        </strong>
-                                        <div class="item-meta">Reserva #<?php echo get_the_ID(); ?></div>
-                                    </div>
-                                    <div class="item-exit-time">
-                                        <?php
-                                             $fecha_salida = 'N/D';
-                                             if (get_post_type() === 'wc_booking') {
-                                                $booking = new WC_Booking(get_the_ID());
-                                                $fecha_salida = date_i18n('d/m/Y H:i', $booking->get_end());
-                                             } else {
-                                                $fechas_str = get_post_meta(get_the_ID(), 'pethome_reserva_fechas', true);
-                                                $hora_egreso = get_post_meta(get_the_ID(), 'pethome_reserva_hora_egreso', true);
-                                                $fecha_fin_str = !empty($fechas_str) ? substr($fechas_str, strpos($fechas_str, ' a ') + 3) : '';
-                                                if ($fecha_fin_str) { $fecha_salida = date_i18n('d/m/Y', strtotime($fecha_fin_str)) . ($hora_egreso ? ' ' . $hora_egreso : ''); }
-                                             }
-                                             echo esc_html($fecha_salida);
-                                        ?>
-                                    </div>
-                                </a>
-                            </li>
-                            <?php endwhile; ?>
-                        </ul>
-                    <?php else : ?>
-                        <p style="text-align:center; font-style:italic; color:#777;">No hay reservas para mostrar.</p>
-                    <?php endif; wp_reset_postdata(); ?>
+            </div>
+            
+            <div class="phh-section">
+                 <h3>Accesos Directos</h3>
+                 <div class="phh-links-grid">
+                    <a href="<?php echo admin_url('admin.php?page=pethome_guardas_agregar'); ?>" class="phh-button add-new"><i class="fa-thin fa-plus"></i><span>Nueva Guarda</span></a>
+                    <a href="<?php echo admin_url('admin.php?page=pethome_todas_las_reservas'); ?>" class="phh-button"><i class="fa-thin fa-list-ul"></i><span>Ver Reservas</span></a>
+                    <a href="<?php echo admin_url('admin.php?page=pethome_clientes'); ?>" class="phh-button"><i class="fa-thin fa-users"></i><span>Ver Clientes</span></a>
+                    <a href="<?php echo admin_url('admin.php?page=pethome_cuidadores'); ?>" class="phh-button"><i class="fa-thin fa-user-nurse"></i><span>Ver Cuidadores</span></a>
                 </div>
             </div>
         </div>
-        
-        <div class="phh-section">
-             <h3>Accesos Directos</h3>
-             <div class="phh-links-grid">
-                <a href="<?php echo admin_url('admin.php?page=pethome_guardas_agregar'); ?>" class="phh-button add-new"><i class="fa-thin fa-plus"></i><span>Nueva Guarda</span></a>
-                <a href="<?php echo admin_url('admin.php?page=pethome_todas_las_reservas'); ?>" class="phh-button"><i class="fa-thin fa-list-ul"></i><span>Ver Reservas</span></a>
-                <a href="<?php echo admin_url('admin.php?page=pethome_clientes'); ?>" class="phh-button"><i class="fa-thin fa-users"></i><span>Ver Clientes</span></a>
-                <a href="<?php echo admin_url('admin.php?page=pethome_cuidadores'); ?>" class="phh-button"><i class="fa-thin fa-user-nurse"></i><span>Ver Cuidadores</span></a>
-            </div>
-        </div>
-    </div>
 
-    <script>
-    document.addEventListener('DOMContentLoaded', function () {
-        const chartData = {
-            labels: <?php echo json_encode(array_values($months)); ?>,
-            reservations: <?php echo json_encode(array_values($reservations_by_month)); ?>,
-            revenue: <?php echo json_encode(array_values($revenue_by_month)); ?>
-        };
+        <script>
+        document.addEventListener('DOMContentLoaded', function () {
+            const chartData = {
+                labels: <?php echo json_encode(array_values($months)); ?>,
+                reservations: <?php echo json_encode(array_values($reservations_by_month)); ?>,
+                revenue: <?php echo json_encode(array_values($revenue_by_month)); ?>
+            };
 
-        const ctxReservas = document.getElementById('phhReservasChart');
-        if (ctxReservas) {
-            new Chart(ctxReservas, {
-                type: 'bar',
-                data: {
-                    labels: chartData.labels,
-                    datasets: [{
-                        label: 'Cantidad de Guardas',
-                        data: chartData.reservations,
-                        backgroundColor: 'rgba(94, 67, 101, 0.6)',
-                        borderColor: 'rgba(94, 67, 101, 1)',
-                        borderWidth: 1
-                    }]
-                },
-                options: { scales: { y: { beginAtZero: true, ticks: { precision: 0 } } }, responsive: true, maintainAspectRatio: false }
-            });
-        }
+            const ctxReservas = document.getElementById('phhReservasChart');
+            if (ctxReservas) {
+                new Chart(ctxReservas, {
+                    type: 'bar',
+                    data: {
+                        labels: chartData.labels,
+                        datasets: [{
+                            label: 'Cantidad de Guardas',
+                            data: chartData.reservations,
+                            backgroundColor: 'rgba(94, 67, 101, 0.6)',
+                            borderColor: 'rgba(94, 67, 101, 1)',
+                            borderWidth: 1
+                        }]
+                    },
+                    options: { scales: { y: { beginAtZero: true, ticks: { precision: 0 } } }, responsive: true, maintainAspectRatio: false }
+                });
+            }
 
-        const ctxMontos = document.getElementById('phhMontosChart');
-        if (ctxMontos) {
-            new Chart(ctxMontos, {
-                type: 'bar',
-                data: {
-                    labels: chartData.labels,
-                    datasets: [{
-                        label: 'Monto Generado ($)',
-                        data: chartData.revenue,
-                        backgroundColor: 'rgba(40, 167, 69, 0.6)',
-                        borderColor: 'rgba(40, 167, 69, 1)',
-                        borderWidth: 1
-                    }]
-                },
-                options: { scales: { y: { beginAtZero: true } }, responsive: true, maintainAspectRatio: false }
-            });
-        }
-    });
-    </script>
-    <?php
-}
+            const ctxMontos = document.getElementById('phhMontosChart');
+            if (ctxMontos) {
+                new Chart(ctxMontos, {
+                    type: 'bar',
+                    data: {
+                        labels: chartData.labels,
+                        datasets: [{
+                            label: 'Monto Generado ($)',
+                            data: chartData.revenue,
+                            backgroundColor: 'rgba(40, 167, 69, 0.6)',
+                            borderColor: 'rgba(40, 167, 69, 1)',
+                            borderWidth: 1
+                        }]
+                    },
+                    options: { scales: { y: { beginAtZero: true } }, responsive: true, maintainAspectRatio: false }
+                });
+            }
+        });
+        </script>
+        <?php
+    }
 }

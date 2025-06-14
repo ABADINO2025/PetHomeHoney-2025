@@ -1,10 +1,6 @@
 <?php
 /**
- * Panel de gestión de cuidadores
  * Panel de gestión de Clientes con buscador y paginación.
- * Plugin Name: PetHomeHoney Plugin
- * Plugin URI:  https://pethomehoney.com.ar
- * Description: Plugin para gestionar reservas de guarda con WooCommerce y CPT.
  * Version:     1.0 (Final y Estable)
  * Author:      Adrián Enrique Badino
  * Author URI:  https://pethomehoney.com.ar

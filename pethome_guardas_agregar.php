@@ -1,11 +1,7 @@
 <?php
 /**
- * pethome_guardas_agregar.php    ·    Formulario completo “Agregar Guarda”
- * Panel de gestión de Clientes con buscador y paginación.
- * Plugin Name: PetHomeHoney Plugin
- * Plugin URI:  https://pethomehoney.com.ar
- * Description: Plugin para gestionar reservas de guarda con WooCommerce y CPT.
- * Version:     1.0 (Final y Estable)
+ * pethome_guardas_agregar.php Formulario completo “Agregar Guarda”
+ * Version:     1.6 (Final y Estable)
  * Author:      Adrián Enrique Badino
  * Author URI:  https://pethomehoney.com.ar
  * Desarrolla   www.streaminginternacional.com 
@@ -13,23 +9,23 @@
 
 if ( ! defined( 'ABSPATH' ) ) exit;
 
+if (isset($_GET['status']) && $_GET['status'] === 'saved') {
+    echo '<div id="message" class="updated notice is-dismissible"><p>' . __('Reserva guardada correctamente. Podés seguir editando o crear una nueva.', 'pethomehoney-plugin') . '</p></div>';
+}
+
 // --- Lógica PHP para obtener datos ---
+global $wpdb;
 $bookings = wc_get_products( [ 'type' => 'booking', 'limit' => -1 ] );
 
-if (!function_exists('pethome_get_booking_daily_cost')) { 
-    function pethome_get_booking_daily_cost( WC_Product_Booking $product ) {
-        $id = $product->get_id();
-        $block_cost = (float) get_post_meta( $id, '_wc_booking_block_cost', true );
-        $base_cost  = (float) get_post_meta( $id, '_wc_booking_cost', true );
-        if ( $block_cost > 0 ) return $block_cost;
-        if ( $base_cost > 0 ) return $base_cost;
-        return 0;
-    }
-}
+// SE ELIMINÓ LA FUNCIÓN DUPLICADA DE AQUÍ PARA EVITAR CONFLICTOS
 
 $servicios_creados = get_option( 'pethome_precios_base', [] );
 $tipos_mascota = get_option( 'pethome_tipos_mascotas', [] );
 $razas            = get_option( 'pethome_razas', [] );
+
+// --- Cargar tipos de cliente ---
+$client_types_table = $wpdb->prefix . 'phh_client_types';
+$client_types = $wpdb->get_results("SELECT * FROM $client_types_table ORDER BY name ASC", ARRAY_A);
 
 // --- Cargar datos de costos avanzados, relaciones y el predefinido ---
 $costos_configs = get_option( 'pethomehoney_costos_guardas_configs', [] );
@@ -73,10 +69,10 @@ $post_id = isset($_GET['post']) ? intval($_GET['post']) : 0;
 $default_values = [
     'guarda_nombre' => '', 'guarda_ubicacion' => '', 'guarda_latitud' => '', 'guarda_longitud' => '',
     'guarda_tarifa_base' => '0', 'guarda_descripcion' => '', 'guarda_imagen_id' => '',
-    'reserva_observaciones' => '', 'reserva_cuidador_asignado' => '', 'reserva_costo_guarda_id' => '',
+    'reserva_observaciones' => '', 'reserva_cuidador_asignado' => '', 'reserva_costo_guarda_id' => '', 'reserva_tipo_cliente_id' => '',
     'reserva_cargos' => '0', 'reserva_entrega' => '0', 'reserva_saldo_final' => '0', 'reserva_precio_total' => '0', 'reserva_subtotal' => '0',
     'reserva_fechas' => '', 'hora_ingreso_reserva' => '10:00', 'hora_egreso_reserva' => '18:00',
-    'booking_product_or_service' => '', 'reserva_servicio' => '', 'pethome_reserva_prioridad' => 'normal',
+    'booking_product_or_service' => '', 'reserva_servicio' => '', 'reserva_prioridad' => 'normal',
     'mascota_nombre' => '', 'mascota_tipo' => '', 'mascota_raza' => '', 'mascota_tamano' => 'chico', 'mascota_edad' => '', 'mascota_edad_meses' => '',
     'mascota_imagen_id' => '', 'mascota_enfermedades' => '', 'mascota_medicamentos' => '', 'mascota_alergias' => '',
     'mascota_cobertura_salud' => 'sin_cobertura', 'mascota_sociable_perros' => 'si', 'mascota_sociable_ninios' => 'si',
@@ -98,7 +94,7 @@ if ( $post_id ) {
         'pethome_guarda_nombre', 'pethome_guarda_ubicacion',
         'pethome_reserva_fechas', 'pethome_reserva_cantidad_dias', 'pethome_reserva_hora_ingreso', 'pethome_reserva_hora_egreso',
         'pethome_reserva_servicio', 'pethome_reserva_subtotal', 'pethome_reserva_precio_total', 'pethome_reserva_entrega', 'pethome_reserva_saldo_final', 'pethome_reserva_cargos',
-        'pethome_reserva_prioridad', 'pethome_reserva_costo_guarda_id',
+        'pethome_reserva_prioridad', 'pethome_reserva_costo_guarda_id', 'pethome_reserva_tipo_cliente_id',
         'pethome_cliente_nombre', 'pethome_cliente_apellido', 'pethome_cliente_dni', 'pethome_cliente_alias_bancario',
         'pethome_cliente_calle', 'pethome_cliente_numero', 'pethome_cliente_barrio', 'pethome_cliente_email', 'pethome_cliente_telefono',
         'pethome_mascota_nombre', 'pethome_mascota_tipo', 'pethome_mascota_raza', 'pethome_mascota_tamano', 'pethome_mascota_edad', 'pethome_mascota_edad_meses', 'pethome_mascota_sexo', 'pethome_mascota_castrada',
@@ -233,7 +229,7 @@ if (!empty($telefono_completo_guardado) && is_numeric($telefono_completo_guardad
                         <option value="" data-cost="0"><?php _e('Seleccionar...', 'pethomehoney-plugin'); ?></option>
                         <optgroup label="<?php _e('Productos de Booking', 'pethomehoney-plugin'); ?>">
                             <?php foreach ( $bookings as $product ) :
-                                $product_cost = pethome_get_booking_daily_cost( $product ); ?>
+                                $product_cost = pethome_get_booking_daily_cost( $product->get_id() ); ?>
                                 <option value="product_id:<?php echo esc_attr( $product->get_id() ); ?>"
                                     data-cost="<?php echo esc_attr( $product_cost ); ?>"
                                     <?php selected( $guarda_data['booking_product_or_service'], 'product_id:' . $product->get_id() ); ?>>
@@ -322,6 +318,21 @@ if (!empty($telefono_completo_guardado) && is_numeric($telefono_completo_guardad
                         <input type="text" id="pethome_cliente_telefono_numero" value="<?php echo esc_attr($telefono_numero_val); ?>" placeholder="<?php esc_attr_e('Número', 'pethomehoney-plugin'); ?>" maxlength="8" title="<?php esc_attr_e('Hasta 8 dígitos del número local sin el 15', 'pethomehoney-plugin'); ?>" style="background-color: #e9ecef; flex-grow:1;">
                     </div>
                     <input type="hidden" id="pethome_cliente_telefono_completo" name="pethome_cliente_telefono" value="<?php echo esc_attr($guarda_data['cliente_telefono']); ?>">
+                </div>
+                <div class="item-tipo-cliente">
+                    <label for="pethome_reserva_tipo_cliente_id"><?php _e('Tipo de Cliente', 'pethomehoney-plugin'); ?></label>
+                    <select id="pethome_reserva_tipo_cliente_id" name="pethome_reserva_tipo_cliente_id" style="background-color: #e9ecef; width:100%;">
+                        <option value="" data-modifier="0"><?php _e('Sin tipo específico', 'pethomehoney-plugin'); ?></option>
+                        <?php
+                        if (!empty($client_types)) {
+                            foreach ($client_types as $type) {
+                                $modifier_val = floatval($type['discount']);
+                                $modifier_label = ($modifier_val > 0 ? '+' : '') . number_format($modifier_val, 2, ',', '.') . '%';
+                                echo '<option value="' . esc_attr($type['id']) . '" ' . selected($guarda_data['reserva_tipo_cliente_id'], $type['id'], false) . ' data-modifier="' . esc_attr($modifier_val) . '">' . esc_html($type['name']) . ' (' . esc_html($modifier_label) . ')</option>';
+                            }
+                        }
+                        ?>
+                    </select>
                 </div>
             </div>
         </div>
@@ -424,7 +435,7 @@ if (!empty($telefono_completo_guardado) && is_numeric($telefono_completo_guardad
                     </select>
                 </div>
                 <div class="costo-calculado-field">
-                    <label><?php _e('Costo Total Calculado', 'pethomehoney-plugin'); ?></label>
+                    <label><?php _e('Costo Base Calculado', 'pethomehoney-plugin'); ?></label>
                     <p id="costo_total_calculado_display" class="display-value">$ 0,00</p>
                 </div>
             </div>
@@ -461,6 +472,7 @@ jQuery(document).ready(function($) {
     const telefonoNumeroInput = document.getElementById('pethome_cliente_telefono_numero');
     const telefonoCompletoHiddenInput = document.getElementById('pethome_cliente_telefono_completo');
     const costoGuardaSelect = document.getElementById('pethome_costo_guarda_select');
+    const tipoClienteSelect = document.getElementById('pethome_reserva_tipo_cliente_id');
     const $statusButtons = $('.pethome-status-buttons .button');
     const $priorityInput = $('#pethome_reserva_prioridad_status');
     let selectedDates = [];
@@ -479,18 +491,23 @@ jQuery(document).ready(function($) {
         if (cantidadDiasDisplay) cantidadDiasDisplay.textContent = cantidadDias > 0 ? cantidadDias : '0';
         if (cantidadDiasHiddenInput) cantidadDiasHiddenInput.value = cantidadDias;
 
-        const manualCostConfigId = costoGuardaSelect ? costoGuardaSelect.value : null;
-        const selectedServiceId = servicioProductoSelect.value;
-        let costConfigToUse = null;
+        // --- 1. Main Reservation Calculation (Based on selected Service/Product) ---
+        const selectedServiceOption = servicioProductoSelect.options[servicioProductoSelect.selectedIndex];
+        const costoDiario = parseFloat(selectedServiceOption.dataset.cost || '0');
+        let reservaSubTotal = costoDiario * cantidadDias;
 
+        if (costoDiarioDisplay) costoDiarioDisplay.textContent = formatCurrency(costoDiario);
+        if (subTotalBaseDisplay) subTotalBaseDisplay.textContent = formatCurrency(reservaSubTotal);
+        if (subTotalHiddenInput) subTotalHiddenInput.value = reservaSubTotal.toFixed(2);
+        
+        // --- 2. Separate Calculation for "Costo Base Calculado" field (Based on Costo Guarda tables) ---
+        const manualCostConfigId = costoGuardaSelect ? costoGuardaSelect.value : null;
+        let costConfigToUse = null;
         if (manualCostConfigId && pethomeAllCostConfigs[manualCostConfigId]) {
             costConfigToUse = pethomeAllCostConfigs[manualCostConfigId];
-        } else if (pethomeCostData[selectedServiceId]) {
-            costConfigToUse = pethomeCostData[selectedServiceId];
         }
-        
-        let subTotalBase = 0;
 
+        let costoBaseCalculado = 0;
         if (costConfigToUse && cantidadDias > 0) {
             let costoTotalAvanzado = 0;
             const tamano = tamanioMascotaSelect.value;
@@ -513,20 +530,11 @@ jQuery(document).ready(function($) {
                 costoTotalAvanzado += costoDelDia;
                 costoPequenoAnterior = costoPequenoActual;
             }
-            subTotalBase = costoTotalAvanzado;
-            if (costoDiarioDisplay) costoDiarioDisplay.textContent = formatCurrency(cantidadDias > 0 ? (subTotalBase / cantidadDias) : 0);
-        
-        } else {
-            const selectedOption = servicioProductoSelect.options[servicioProductoSelect.selectedIndex];
-            const costoDiario = parseFloat(selectedOption.dataset.cost || '0');
-            subTotalBase = costoDiario * cantidadDias;
-            if (costoDiarioDisplay) costoDiarioDisplay.textContent = formatCurrency(costoDiario);
+            costoBaseCalculado = costoTotalAvanzado;
         }
-        
-        if (costoTotalCalculadoDisplay) costoTotalCalculadoDisplay.textContent = formatCurrency(subTotalBase);
-        if (subTotalBaseDisplay) subTotalBaseDisplay.textContent = formatCurrency(subTotalBase);
-        if (subTotalHiddenInput) subTotalHiddenInput.value = subTotalBase.toFixed(2);
+        if (costoTotalCalculadoDisplay) costoTotalCalculadoDisplay.textContent = formatCurrency(costoBaseCalculado);
 
+        // --- 3. Continue Main Reservation Calculation (Charges, Total, etc.) ---
         let totalPorcentajeRecargos = 0;
         document.querySelectorAll('select[data-p-select]').forEach(select => {
             const selectedOption = select.options[select.selectedIndex];
@@ -534,18 +542,33 @@ jQuery(document).ready(function($) {
                 totalPorcentajeRecargos += (parseFloat(selectedOption.dataset.p) / 100);
             }
         });
-        const montoTotalRecargosDescuentos = subTotalBase * totalPorcentajeRecargos;
+        const montoTotalRecargosDescuentos = reservaSubTotal * totalPorcentajeRecargos;
         if (reservaCargosDisplay) reservaCargosDisplay.textContent = formatCurrency(montoTotalRecargosDescuentos);
         if (cargosHiddenInput) cargosHiddenInput.value = montoTotalRecargosDescuentos.toFixed(2);
-        const precioTotal = subTotalBase + montoTotalRecargosDescuentos;
-        if (precioTotalDisplay) precioTotalDisplay.textContent = formatCurrency(precioTotal);
-        if (precioTotalHiddenInput) precioTotalHiddenInput.value = precioTotal.toFixed(2);
-        const entrega = precioTotal * 0.10;
+        
+        const totalConRecargos = reservaSubTotal + montoTotalRecargosDescuentos;
+
+        let precioTotalFinal = totalConRecargos;
+        if (tipoClienteSelect && tipoClienteSelect.value) {
+            const selectedClientOption = tipoClienteSelect.options[tipoClienteSelect.selectedIndex];
+            const clientModifierPercent = parseFloat(selectedClientOption.dataset.modifier || '0');
+            if (clientModifierPercent !== 0) {
+                const clientModifierAmount = totalConRecargos * (clientModifierPercent / 100);
+                precioTotalFinal += clientModifierAmount;
+            }
+        }
+
+        if (precioTotalDisplay) precioTotalDisplay.textContent = formatCurrency(precioTotalFinal);
+        if (precioTotalHiddenInput) precioTotalHiddenInput.value = precioTotalFinal.toFixed(2);
+        
+        const entrega = precioTotalFinal * 0.10;
         if (reservaEntregaDisplay) reservaEntregaDisplay.textContent = formatCurrency(entrega);
         if (entregaHiddenInput) entregaHiddenInput.value = entrega.toFixed(2);
-        const saldoFinal = precioTotal - entrega;
+
+        const saldoFinal = precioTotalFinal - entrega;
         if (reservaSaldoFinalDisplay) reservaSaldoFinalDisplay.textContent = formatCurrency(saldoFinal);
         if (saldoFinalHiddenInput) saldoFinalHiddenInput.value = saldoFinal.toFixed(2);
+        
         updateFechasSeleccionadasTexto();
     }
     
@@ -585,6 +608,7 @@ jQuery(document).ready(function($) {
     if(servicioProductoSelect) servicioProductoSelect.addEventListener('change', updateCalculations);
     if(costoGuardaSelect) costoGuardaSelect.addEventListener('change', updateCalculations);
     if(tamanioMascotaSelect) tamanioMascotaSelect.addEventListener('change', updateCalculations);
+    if(tipoClienteSelect) tipoClienteSelect.addEventListener('change', updateCalculations);
     document.querySelectorAll('select[data-p-select]').forEach(select => {
         select.addEventListener('change', updateCalculations);
     });

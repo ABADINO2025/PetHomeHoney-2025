@@ -1,21 +1,13 @@
 <?php
-/**
- * Panel de gestión de Clientes con buscador y paginación.
- * Plugin Name: PetHomeHoney Plugin
- * Plugin URI:  https://pethomehoney.com.ar
- * Description: Plugin para gestionar reservas de guarda con WooCommerce y CPT.
- * Version:     1.0 (Final y Estable)
- * Author:      Adrián Enrique Badino
- * Author URI:  https://pethomehoney.com.ar
- * Desarrolla   www.streaminginternacional.com 
- */
 if (!defined('ABSPATH')) exit;
 
 /**
  * Muestra el panel de configuración con el formulario y la tabla.
  */
 function pethome_configuracion_panel() {
-    // Leer opciones existentes
+    global $wpdb;
+    
+    // Leer opciones existentes y datos de la DB
     $precios_base = get_option('pethome_precios_base', []);
     $cliente_mensaje = get_option('pethome_cliente_mensaje', '');
     $tipos_mascotas  = get_option('pethome_tipos_mascotas', []);
@@ -25,9 +17,18 @@ function pethome_configuracion_panel() {
     $whatsapp_contacts = get_option('pethome_whatsapp_numbers', []);
     $excluded_roles = get_option('pethome_importer_excluded_roles', ['employee', 'administrator']);
     
+    // --- Datos para Tipos de Cliente ---
+    $client_types_table = $wpdb->prefix . 'phh_client_types';
+    $client_types = $wpdb->get_results("SELECT * FROM $client_types_table ORDER BY name ASC");
+    $editando_tipo_cliente_id = isset($_GET['editar_tipo_cliente']) ? absint($_GET['editar_tipo_cliente']) : 0;
+    $client_type_to_edit = null;
+    if ($editando_tipo_cliente_id > 0) {
+        $client_type_to_edit = $wpdb->get_row($wpdb->prepare("SELECT * FROM $client_types_table WHERE id = %d", $editando_tipo_cliente_id));
+    }
+
     $productos_booking = new WP_Query(['post_type' => 'product', 'posts_per_page' => -1, 'tax_query' => [['taxonomy' => 'product_type', 'field' => 'slug', 'terms' => 'booking']], 'post_status' => 'publish']);
 
-    // Índices de edición por GET
+    // Índices de edición por GET para las otras secciones
     $editando_precio = isset($_GET['editar']) ? intval($_GET['editar']) : -1;
     $editando_tipo   = isset($_GET['editar_tipo']) ? intval($_GET['editar_tipo']) : -1;
     $editando_raza   = isset($_GET['editar_raza']) ? intval($_GET['editar_raza']) : -1;
@@ -50,18 +51,26 @@ function pethome_configuracion_panel() {
         .pethome-config-wrap h1, .pethome-config-wrap h2 { color: #5e4365; }
         .pethome-config-wrap h1 { font-size: 28px; text-align: center; margin-bottom: 30px; }
         .pethome-config-wrap h1 i, .pethome-config-wrap h2 i { margin-right: 12px; }
-        .pethome-config-wrap .form-table { border-radius: 8px; overflow: hidden; }
         .pethome-config-wrap .form-table th, .pethome-config-wrap .widefat th { padding: 15px; }
         .pethome-config-wrap .widefat thead th { background-color: #5e4365; color: #ffffff; border-bottom: none !important; }
         .pethome-config-wrap .widefat { border-radius: 8px; overflow: hidden; border: 1px solid #e0e0e0; }
         .pethome-config-wrap input[type="text"], .pethome-config-wrap input[type="number"], .pethome-config-wrap select, .pethome-config-wrap textarea { width: 100%; padding: 8px; background-color: #f8f9fa; border: 1px solid #ddd; border-radius: 4px; }
         .pethome-config-wrap .small-text { width: auto; }
-        .pethome-config-wrap .button i { margin-right: 5px; }
+        .pethome-config-wrap .button i { margin-right: 8px; }
+        .modificador-fields { display: flex; gap: 10px; align-items: center; }
+        .modificador-fields select { flex: 1; }
+        .modificador-fields input { flex: 2; }
+        .modificador-fields .percent-sign { font-weight: bold; }
         .whatsapp-icon-group { color: #007bff; }
         .whatsapp-icon-number { color: #25D366; }
         .roles-checkbox-group { display: flex; flex-wrap: wrap; gap: 15px; }
         .roles-checkbox-group label { display: block; }
         .roles-selection-actions { margin-bottom: 10px; display: flex; gap: 10px; }
+        .pethome-config-wrap .button-primary { background-color: #5e4365 !important; border-color: #4a3550 !important; }
+        .pethome-config-wrap .button:not(.button-primary) { color: #5e4365 !important; border-color: #5e4365 !important; }
+        .pethome-config-wrap .button:not(.button-primary):hover { background-color: #5e4365 !important; color: #fff !important; }
+        .pethome-config-wrap .widefat .button.button-small { background: transparent !important; border: none !important; color: #5e4365 !important; padding: 4px; }
+        .pethome-config-wrap .widefat .button.is-destructive { color: #d63638 !important; }
     </style>
 
     <div class="wrap pethome-config-wrap">
@@ -72,47 +81,110 @@ function pethome_configuracion_panel() {
         <?php endif; ?>
 
         <div class="form-container">
-            <h2><i class="fa-thin fa-money-bill-1"></i>Precios Base de Servicios</h2>
-            <form method="post" action="">
-                <?php wp_nonce_field('pethome_guardar_configuracion_nonce'); ?>
-                <table class="widefat striped">
-                    <thead><tr><th>Servicio</th><th>Precio</th><th style="width:120px;">Acción</th></tr></thead>
-                    <tbody>
-                        <tr>
-                            <td><input type="text" name="nuevo_servicio" class="regular-text" required placeholder="Ej: Guardería Diurna"></td>
-                            <td><input type="number" step="0.01" name="nuevo_precio" class="regular-text" required placeholder="Ej: 2500.00"></td>
-                            <td><button type="submit" name="pethome_guardar_configuracion" class="button button-primary"><i class="fa-thin fa-plus"></i>Agregar</button></td>
-                        </tr>
-                    </tbody>
-                </table>
-            </form>
-            <h3 class="wp-heading-inline" style="margin-top:20px;">Servicios Creados</h3>
-            <table class="widefat striped">
-                <thead><tr><th>Servicio</th><th>Precio</th><th colspan="2" style="width:180px;">Acciones</th></tr></thead>
-                <tbody>
-                    <?php if ($precios_base) : foreach ($precios_base as $idx => $srv) : ?>
-                        <?php if ($editando_precio === $idx) : ?>
-                            <tr><form method="post" action="">
-                                <?php wp_nonce_field('pethome_guardar_configuracion_nonce'); ?>
-                                <td><input type="text" name="servicio_editado" value="<?php echo esc_attr($srv['servicio']); ?>" class="regular-text" required></td>
-                                <td><input type="number" step="0.01" name="precio_editado" value="<?php echo esc_attr($srv['precio']); ?>" class="regular-text" required></td>
-                                <td><input type="hidden" name="indice_edit" value="<?php echo $idx; ?>"><button type="submit" name="editar_servicio_guardar" class="button button-primary"><i class="fa-thin fa-floppy-disk"></i>Guardar</button></td>
-                                <td><a href="?page=pethome_configuracion" class="button"><i class="fa-thin fa-xmark"></i>Cancelar</a></td>
-                            </form></tr>
-                        <?php else : ?>
+            <h2><i class="fa-thin fa-users-gear"></i>Tipos de Cliente</h2>
+            <p>Gestioná las categorías de clientes y sus modificadores de precio asociados.</p>
+
+            <div class="form-container" style="background-color:#f9f9f9; box-shadow: none; border-color: #e5e5e5;">
+                <h3><?php echo $client_type_to_edit ? 'Editar Tipo de Cliente' : 'Añadir Nuevo Tipo de Cliente'; ?></h3>
+                <form method="post" action="">
+                    <?php wp_nonce_field('pethome_client_type_nonce'); ?>
+                    
+                    <?php if ($client_type_to_edit) : ?>
+                        <input type="hidden" name="id_tipo_cliente" value="<?php echo esc_attr($client_type_to_edit->id); ?>">
+                        <table class="form-table">
                             <tr>
-                                <td><?php echo esc_html($srv['servicio']); ?></td>
-                                <td><?php echo function_exists('wc_price') ? wc_price($srv['precio']) : '$' . $srv['precio']; ?></td>
-                                <td><a href="<?php echo esc_url(add_query_arg('editar', $idx, menu_page_url('pethome_configuracion', false))); ?>" class="button button-small"><i class="fa-thin fa-pen-to-square"></i></a></td>
-                                <td><a href="<?php echo wp_nonce_url(add_query_arg(['action' => 'delete', 'borrar_precio' => $idx]), 'pethome_delete_item'); ?>" class="button button-small is-destructive" onclick="return confirm('¿Estás seguro?')"><i class="fa-thin fa-trash-can"></i></a></td>
+                                <th scope="row"><label for="tipo_cliente_nombre_edit">Nombre del Tipo</label></th>
+                                <td><input type="text" name="tipo_cliente_nombre_edit" id="tipo_cliente_nombre_edit" value="<?php echo esc_attr($client_type_to_edit->name); ?>" required></td>
                             </tr>
-                        <?php endif; endforeach; else : ?>
-                        <tr><td colspan="4">No hay servicios creados todavía.</td></tr>
+                            <tr>
+                                <th scope="row"><label for="tipo_modificador_edit">Modificador de Precio</label></th>
+                                <td>
+                                    <div class="modificador-fields">
+                                        <?php 
+                                            $current_valor = floatval($client_type_to_edit->discount);
+                                            $current_tipo = ($current_valor < 0) ? 'descuento' : 'recargo';
+                                        ?>
+                                        <select name="tipo_modificador_edit" id="tipo_modificador_edit">
+                                            <option value="recargo" <?php selected($current_tipo, 'recargo'); ?>>Recargo (+)</option>
+                                            <option value="descuento" <?php selected($current_tipo, 'descuento'); ?>>Descuento (-)</option>
+                                        </select>
+                                        <input type="number" step="0.01" min="0" name="valor_modificador_edit" value="<?php echo esc_attr(abs($current_valor)); ?>" required>
+                                        <span class="percent-sign">%</span>
+                                    </div>
+                                </td>
+                            </tr>
+                        </table>
+                        <button type="submit" name="editar_tipo_cliente_guardar" value="1" class="button button-primary"><i class="fa-thin fa-floppy-disk"></i>Guardar Cambios</button>
+                        <a href="?page=pethome_configuracion" class="button"><i class="fa-thin fa-xmark"></i>Cancelar</a>
+
+                    <?php else : ?>
+                        <table class="form-table">
+                            <tr>
+                                <th scope="row"><label for="nuevo_tipo_cliente_nombre">Nombre del Tipo</label></th>
+                                <td><input type="text" name="nuevo_tipo_cliente_nombre" id="nuevo_tipo_cliente_nombre" value="" required></td>
+                            </tr>
+                            <tr>
+                                <th scope="row"><label for="nuevo_tipo_modificador">Modificador de Precio</label></th>
+                                <td>
+                                    <div class="modificador-fields">
+                                        <select name="nuevo_tipo_modificador" id="nuevo_tipo_modificador">
+                                            <option value="recargo">Recargo (+)</option>
+                                            <option value="descuento">Descuento (-)</option>
+                                        </select>
+                                        <input type="number" step="0.01" min="0" name="nuevo_valor_modificador" value="0" required>
+                                        <span class="percent-sign">%</span>
+                                    </div>
+                                </td>
+                            </tr>
+                        </table>
+                        <button type="submit" name="guardar_tipo_cliente" value="1" class="button button-primary"><i class="fa-thin fa-plus"></i>Agregar Tipo</button>
+                    <?php endif; ?>
+                </form>
+            </div>
+
+            <h3 class="wp-heading-inline" style="margin-top:20px;">Tipos Existentes</h3>
+            <table class="widefat striped">
+                <thead>
+                    <tr>
+                        <th>Nombre</th>
+                        <th>Modificador (%)</th>
+                        <th style="width:180px;">Acciones</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <?php if ($client_types) : foreach ($client_types as $type) : ?>
+                        <tr>
+                            <td><strong><?php echo esc_html($type->name); ?></strong></td>
+                            <td>
+                                <?php
+                                    $valor = floatval($type->discount);
+                                    $color = '#3c434a'; // Gris por defecto para el 0
+                                    $signo = ($valor > 0) ? '+' : '-';
+
+                                    if ($valor > 0) {
+                                        $color = '#d63638'; // Rojo para Recargo
+                                    } elseif ($valor < 0) {
+                                        $color = '#28a745'; // Verde para Descuento
+                                    }
+                                    if (0 == $valor) {
+                                        $signo = '';
+                                    }
+
+                                    echo "<span style='color:{$color}; font-weight:bold;'>" . $signo . ' ' . number_format(abs($valor), 2, ',', '.') . "%</span>";
+                                ?>
+                            </td>
+                            <td>
+                                <a href="<?php echo esc_url(add_query_arg('editar_tipo_cliente', $type->id, menu_page_url('pethome_configuracion', false))); ?>" class="button button-small"><i class="fa-thin fa-pen-to-square"></i></a>
+                                <a href="<?php echo wp_nonce_url(add_query_arg(['action' => 'delete_client_type', 'borrar_tipo_cliente' => $type->id]), 'pethome_delete_client_type_' . $type->id); ?>" class="button button-small is-destructive" onclick="return confirm('¿Estás seguro de que querés eliminar este tipo?')"><i class="fa-thin fa-trash-can"></i></a>
+                            </td>
+                        </tr>
+                    <?php endforeach; else : ?>
+                        <tr><td colspan="3">No hay tipos de cliente creados todavía.</td></tr>
                     <?php endif; ?>
                 </tbody>
             </table>
         </div>
-        
+
         <div class="form-container">
             <h2><i class="fa-thin fa-paw"></i>Tipos de Mascotas</h2>
              <form method="post" action="">
@@ -406,7 +478,7 @@ function pethome_configuracion_panel() {
                         </td>
                     </tr>
                 </table>
-                <p class="submit"><button type="submit" class="button button-primary"><i class="fa-thin fa-floppy-disk"></i> Guardar Exclusiones</button></p>
+                <p class="submit"><button type="submit" name="guardar_exclusiones" class="button button-primary"><i class="fa-thin fa-floppy-disk"></i> Guardar Exclusiones</button></p>
             </form>
         </div>
         

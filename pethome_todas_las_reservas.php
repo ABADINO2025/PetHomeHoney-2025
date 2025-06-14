@@ -1,12 +1,6 @@
 <?php
 /**
  * File: pethome_todas_las_reservas.php
- * Muestra un panel unificado, con búsqueda y paginación, de todas las reservas, ordenado por fecha de creación y con edición en línea.
- * Panel de listado de reservas (modificado para ser un CPT 'reserva_guarda' o WC_Booking)
- * Panel de gestión de Clientes con buscador y paginación.
- * Plugin Name: PetHomeHoney Plugin
- * Plugin URI:  https://pethomehoney.com.ar
- * Description: Plugin para gestionar reservas de guarda con WooCommerce y CPT.
  * Version:     1.0 (Final y Estable)
  * Author:      Adrián Enrique Badino
  * Author URI:  https://pethomehoney.com.ar
